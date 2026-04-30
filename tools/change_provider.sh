@@ -33,11 +33,13 @@ verify_key() {
 
 load_config() {
     if [ -f "$ENV_FILE" ]; then
+        # Strip \r to handle env files written on Windows (CRLF -> LF)
         while IFS='=' read -r key value; do
             [[ "$key" =~ ^#.* ]] && continue
             [ -z "$key" ] && continue
+            value="${value%$'\r'}"  # strip trailing \r just in case
             export "$key=$value"
-        done < "$ENV_FILE"
+        done < <(tr -d '\r' < "$ENV_FILE")
     else
         echo -e "  ${RED}[ERROR] No configuration file found at $ENV_FILE${RESET}"
         echo -e "  Please run setup first."

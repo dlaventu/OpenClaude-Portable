@@ -112,12 +112,14 @@ echo ""
 # ─── Check for settings ─────────────────────────────────────
 goto_loaded=0
 if [ -f "$ENV_FILE" ]; then
-    ENV_CONTENT="$(cat "$ENV_FILE" 2>/dev/null || true)"
+    # Strip \r to handle env files written on Windows (CRLF -> LF)
+    ENV_CONTENT="$(cat "$ENV_FILE" 2>/dev/null | tr -d '\r' || true)"
     if [[ "$ENV_CONTENT" == *"AI_PROVIDER="* ]]; then
         # Load settings
         while IFS='=' read -r key value; do
             [[ "$key" =~ ^#.* ]] && continue
             [ -z "$key" ] && continue
+            value="${value%$'\r'}"  # strip trailing \r just in case
             export "$key=$value"
         done <<< "$ENV_CONTENT"
         goto_loaded=1
@@ -446,11 +448,12 @@ if [ "$goto_loaded" -eq 0 ]; then
     echo ""
     echo -e "  ${GREEN}[OK] Settings saved!${RESET}"
     echo ""
-    # Reload
-    ENV_CONTENT="$(cat "$ENV_FILE" 2>/dev/null || true)"
+    # Reload (strip \r for cross-platform safety)
+    ENV_CONTENT="$(cat "$ENV_FILE" 2>/dev/null | tr -d '\r' || true)"
     while IFS='=' read -r key value; do
         [[ "$key" =~ ^#.* ]] && continue
         [ -z "$key" ] && continue
+        value="${value%$'\r'}"
         export "$key=$value"
     done <<< "$ENV_CONTENT"
 fi
@@ -560,8 +563,16 @@ fi
 echo -e "  ${CYAN}[~] Starting AI Engine...${RESET}"
 echo ""
 
+# Map internal provider name to openclaude --provider flag
 PROVIDER_ARGS=""
-[ -n "$AI_PROVIDER" ] && PROVIDER_ARGS="--provider $AI_PROVIDER"
+if [ -n "$AI_PROVIDER" ]; then
+    OC_PROVIDER="$AI_PROVIDER"
+    # NVIDIA NIM uses openai-compat internally but the engine expects --provider nvidia-nim
+    if [ "$AI_PROVIDER" = "openai" ] && [[ "$OPENAI_BASE_URL" == *"integrate.api.nvidia.com"* ]]; then
+        OC_PROVIDER="nvidia-nim"
+    fi
+    PROVIDER_ARGS="--provider $OC_PROVIDER"
+fi
 
 cd "$ENGINE_DIR"
 
