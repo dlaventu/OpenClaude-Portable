@@ -20,6 +20,9 @@ set "ENV_FILE=%DATA_DIR%\ai_settings.env"
 set "NODE_VERSION=22.14.0"
 set "NODE_DIR_NAME=node-win-x64"
 set "NODE_DIR=%ENGINE_DIR%\%NODE_DIR_NAME%"
+set "GIT_VERSION=2.54.0"
+set "GIT_DIR_NAME=git-win-x64"
+set "GIT_DIR=%ENGINE_DIR%\%GIT_DIR_NAME%"
 
 :: 1. Force the portable AI to save logs/memory strictly to the USB
 set "CLAUDE_CONFIG_DIR=%DATA_DIR%\openclaude"
@@ -70,6 +73,23 @@ if not exist "%ENGINE_DIR%\node_modules\@gitlawb\openclaude" (
     echo   !GREEN![OK] Engine installed!!RESET!
     popd
 )
+
+:: 2.1 Check GitPortable
+if not exist "%GIT_DIR%\git-cmd.exe" (
+    echo   !YELLOW![~] GitPortable not found for Windows-x64. Downloading...!RESET!
+	curl.exe -L "https://github.com/git-for-windows/git/releases/download/v%GIT_VERSION%.windows.1/PortableGit-%GIT_VERSION%-64-bit.7z.exe" -o "%ENGINE_DIR%\GitPortable.exe"
+    if errorlevel 1 (
+        echo   !RED![ERROR] Failed to download GitPortable!!RESET!
+        pause
+        exit /b 1
+    )
+    echo   !YELLOW![~] Extracting GitPortable...!RESET!
+    %ENGINE_DIR%\GitPortable -o%ENGINE_DIR%\%GIT_DIR_NAME% -y
+    del "%ENGINE_DIR%\GitPortable.exe"
+    echo   !GREEN![OK] GitPortable installed to %GIT_DIR%!RESET!
+)
+
+set "CLAUDE_CODE_GIT_BASH_PATH=%GIT_DIR%\bin\bash.exe"
 
 :: 3. Check for flags (--offline, --quick)
 set "SKIP_UPDATE=0"
