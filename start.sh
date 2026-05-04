@@ -39,8 +39,44 @@ NODE_DIR="$ENGINE_DIR/$NODE_DIR_NAME"
 NODE_BIN="$NODE_DIR/bin/node"
 NPM_BIN="$NODE_DIR/bin/npm"
 NPX_BIN="$NODE_DIR/bin/npx"
+OPENCLAUDE_DIR="$ENGINE_DIR/node_modules/@gitlawb/openclaude"
+OC_BIN="$OPENCLAUDE_DIR/bin/openclaude"
+OC_CLI="$OPENCLAUDE_DIR/dist/cli.mjs"
 
 mkdir -p "$ENGINE_DIR"
+
+engine_ready() {
+    [ -f "$OC_BIN" ] && [ -f "$OC_CLI" ]
+}
+
+install_engine() {
+    local action="$1"
+    echo -e "${YELLOW}[~] ${action} OpenClaude Engine...${RESET}"
+    echo -e "${DIM}    This can take several minutes on slower USB drives or networks.${RESET}"
+    cd "$ENGINE_DIR" || exit 1
+    "$NPM_BIN" install @gitlawb/openclaude@latest --no-audit --no-fund --loglevel=warn --no-bin-links &
+    local npm_pid=$!
+    local elapsed=0
+    while kill -0 "$npm_pid" 2>/dev/null; do
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ $((elapsed % 15)) -eq 0 ] && kill -0 "$npm_pid" 2>/dev/null; then
+            echo -e "${DIM}    Still working... npm install has been running for ${elapsed}s.${RESET}"
+        fi
+    done
+    wait "$npm_pid"
+    local npm_status=$?
+    if [ $npm_status -ne 0 ]; then
+        echo -e "${RED}[ERROR] OpenClaude Engine install failed (npm exit $npm_status).${RESET}"
+        exit 1
+    fi
+    if ! engine_ready; then
+        echo -e "${RED}[ERROR] OpenClaude Engine install is incomplete.${RESET}"
+        echo -e "${DIM}        Missing expected files under $OPENCLAUDE_DIR${RESET}"
+        exit 1
+    fi
+    echo -e "${GREEN}[OK] Engine installed!${RESET}"
+}
 
 if [ ! -f "$NODE_BIN" ]; then
     echo -e "${YELLOW}[~] Node.js not found for $PLATFORM-$NODE_ARCH. Downloading...${RESET}"
@@ -51,19 +87,28 @@ if [ ! -f "$NODE_BIN" ]; then
         echo -e "${RED}[ERROR] Failed to download Node.js!${RESET}"
         exit 1
     fi
+    echo -e "${YELLOW}[~] Extracting Node.js...${RESET}"
+    echo -e "${DIM}    This can be silent for a few minutes on external drives.${RESET}"
+    rm -rf "$NODE_DIR"
     mkdir -p "$NODE_DIR"
     tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}[ERROR] Failed to extract Node.js!${RESET}"
+        rm -f "$TEMP_TAR"
+        exit 1
+    fi
     rm "$TEMP_TAR"
     echo -e "${GREEN}[OK] Node.js installed to $NODE_DIR${RESET}"
 fi
 
 export PATH="$NODE_DIR/bin:$PATH"
 
-if [ ! -d "$ENGINE_DIR/node_modules/@gitlawb/openclaude" ]; then
-    echo -e "${YELLOW}[~] Installing OpenClaude Engine...${RESET}"
-    cd "$ENGINE_DIR"
-    npm install @gitlawb/openclaude@latest --no-audit --no-fund --loglevel=error --no-bin-links
-    echo -e "${GREEN}[OK] Engine installed!${RESET}"
+if ! engine_ready; then
+    if [ -d "$OPENCLAUDE_DIR" ]; then
+        echo -e "${YELLOW}[~] Incomplete OpenClaude Engine detected. Reinstalling...${RESET}"
+        rm -rf "$OPENCLAUDE_DIR"
+    fi
+    install_engine "Installing"
 fi
 
 # Portable data
@@ -99,9 +144,9 @@ if [ $SKIP_UPDATE -eq 1 ]; then
 else
     echo -e "  ${YELLOW}[~] Checking for engine updates...${RESET}"
     cd "$ENGINE_DIR"
-    if npm outdated @gitlawb/openclaude 2>/dev/null | grep -q openclaude; then
+    if "$NPM_BIN" outdated @gitlawb/openclaude 2>/dev/null | grep -q openclaude; then
         echo -e "  ${YELLOW}[~] New version detected! Upgrading...${RESET}"
-        npm install @gitlawb/openclaude@latest --no-audit --no-fund --loglevel=error --no-bin-links >/dev/null 2>&1
+        install_engine "Upgrading"
         echo -e "  ${GREEN}[OK] Engine upgraded to latest version!${RESET}"
     else
         echo -e "  ${GREEN}[OK] Engine is up to date!${RESET}"
@@ -577,11 +622,11 @@ fi
 cd "$ENGINE_DIR"
 
 # Use portable binary directly (not npx)
-OC_BIN="$ENGINE_DIR/node_modules/@gitlawb/openclaude/bin/openclaude"
 if [ -f "$OC_BIN" ]; then
     "$NODE_BIN" "$OC_BIN" $PROVIDER_ARGS $CMD_ARGS
 else
-    npx openclaude $PROVIDER_ARGS $CMD_ARGS
+    echo -e "  ${RED}[ERROR] OpenClaude Engine is missing. Re-run ./start.sh to repair the install.${RESET}"
+    exit 1
 fi
 
 if [ -n "$OLLAMA_PID" ]; then
