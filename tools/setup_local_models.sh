@@ -20,14 +20,21 @@ ARCH=$(uname -m)
 
 if [ "$OS_NAME" = "darwin" ]; then
     PLATFORM="darwin"
+    OLLAMA_EXT="tgz"
     OLLAMA_URL="https://github.com/ollama/ollama/releases/latest/download/ollama-darwin.tgz"
     xattr -cr "$SCRIPT_DIR" 2>/dev/null || true
 elif [ "$OS_NAME" = "linux" ]; then
     PLATFORM="linux"
+    OLLAMA_EXT="tar.zst"
+    if ! command -v zstd >/dev/null 2>&1; then
+        echo -e "${RED}[ERROR] zstd is not installed but is required to extract Ollama on Linux.${RESET}"
+        echo -e "${YELLOW}Please install zstd (e.g. sudo apt install zstd) and try again.${RESET}"
+        exit 1
+    fi
     if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then
-        OLLAMA_URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tgz"
+        OLLAMA_URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
     elif [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-        OLLAMA_URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-arm64.tgz"
+        OLLAMA_URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-arm64.tar.zst"
     else
         echo -e "${RED}Unsupported Linux architecture for Ollama: $ARCH${RESET}"
         exit 1
@@ -175,11 +182,11 @@ if [ -x "$OLLAMA_EXE" ]; then
     echo -e "      ${GREEN}Engine already installed!${RESET}"
 else
     echo -e "      ${YELLOW}Downloading Ollama Engine ($PLATFORM)...${RESET}"
-    curl -L "$OLLAMA_URL" -o "$OLLAMA_DIR/ollama.tgz"
-    if [ -f "$OLLAMA_DIR/ollama.tgz" ]; then
+    curl -L "$OLLAMA_URL" -o "$OLLAMA_DIR/ollama.$OLLAMA_EXT"
+    if [ -f "$OLLAMA_DIR/ollama.$OLLAMA_EXT" ]; then
         echo -e "      ${YELLOW}Extracting...${RESET}"
-        tar -xzf "$OLLAMA_DIR/ollama.tgz" -C "$OLLAMA_DIR" 2>/dev/null
-        rm -f "$OLLAMA_DIR/ollama.tgz"
+        tar -xf "$OLLAMA_DIR/ollama.$OLLAMA_EXT" -C "$OLLAMA_DIR" 2>/dev/null
+        rm -f "$OLLAMA_DIR/ollama.$OLLAMA_EXT"
         
         # If it extracts as bin/ollama, move it
         if [ -f "$OLLAMA_DIR/bin/ollama" ]; then
