@@ -183,22 +183,24 @@ setup_provider() {
     echo ""
     echo -e "  ${CYAN}1)${RESET} ${BOLD}OpenRouter${RESET}   ${DIM}- 200+ Free and Paid Models${RESET}  ${GREEN}[RECOMMENDED]${RESET}"
     echo -e "  ${CYAN}2)${RESET} ${BOLD}NVIDIA NIM${RESET}   ${DIM}- High-Speed GPU Free Tier${RESET}   ${GREEN}[RECOMMENDED]${RESET}"
-    echo -e "  ${CYAN}3)${RESET} ${BOLD}Gemini${RESET}       ${DIM}- Google AI API${RESET}"
-    echo -e "  ${CYAN}4)${RESET} ${BOLD}Claude${RESET}       ${DIM}- Anthropic API${RESET}"
-    echo -e "  ${CYAN}5)${RESET} ${BOLD}OpenAI${RESET}       ${DIM}- GPT / Codex API${RESET}"
-    echo -e "  ${CYAN}6)${RESET} ${BOLD}Ollama${RESET}       ${DIM}- Local Offline AI (No internet)${RESET}"
+    echo -e "  ${CYAN}3)${RESET} ${BOLD}DeepSeek${RESET}     ${DIM}- DeepSeek API (OpenAI-compatible)${RESET}"
+    echo -e "  ${CYAN}4)${RESET} ${BOLD}Gemini${RESET}       ${DIM}- Google AI API${RESET}"
+    echo -e "  ${CYAN}5)${RESET} ${BOLD}Claude${RESET}       ${DIM}- Anthropic API${RESET}"
+    echo -e "  ${CYAN}6)${RESET} ${BOLD}OpenAI${RESET}       ${DIM}- GPT / Codex API${RESET}"
+    echo -e "  ${CYAN}7)${RESET} ${BOLD}Ollama${RESET}       ${DIM}- Local Offline AI (No internet)${RESET}"
     echo ""
 
     while true; do
-        read -p "  Select your provider (1-6): " PROVIDER_SEL
+        read -p "  Select your provider (1-7): " PROVIDER_SEL
         case "$PROVIDER_SEL" in
             1) setup_openrouter; return ;;
             2) setup_nvidia; return ;;
-            3) setup_gemini; return ;;
-            4) setup_claude; return ;;
-            5) setup_openai; return ;;
-            6) setup_ollama; return ;;
-            *) echo -e "  ${RED}[ERROR] Invalid selection. Please choose 1-6.${RESET}" ;;
+            3) setup_deepseek; return ;;
+            4) setup_gemini; return ;;
+            5) setup_claude; return ;;
+            6) setup_openai; return ;;
+            7) setup_ollama; return ;;
+            *) echo -e "  ${RED}[ERROR] Invalid selection. Please choose 1-7.${RESET}" ;;
         esac
     done
 }
@@ -211,6 +213,7 @@ verify_key() {
         gemini)     curl -sf "https://generativelanguage.googleapis.com/v1beta/models?key=$key" > /dev/null 2>&1 ;;
         anthropic)  curl -sf -H "x-api-key: $key" -H "anthropic-version: 2023-06-01" https://api.anthropic.com/v1/models > /dev/null 2>&1 ;;
         nvidia)     curl -sf -H "Authorization: Bearer $key" https://integrate.api.nvidia.com/v1/models > /dev/null 2>&1 ;;
+        deepseek)   curl -sf -H "Authorization: Bearer $key" https://api.deepseek.com/models > /dev/null 2>&1 ;;
         openai)     curl -sf -H "Authorization: Bearer $key" https://api.openai.com/v1/models > /dev/null 2>&1 ;;
     esac
 }
@@ -351,10 +354,10 @@ setup_ollama() {
     echo ""
     echo -e "  ${CYAN}--- OLLAMA LOCAL SETUP ---${RESET}"
     echo ""
-    
+
     OLLAMA_BIN="$DATA_DIR/ollama/ollama"
     [ ! -f "$OLLAMA_BIN" ] && OLLAMA_BIN="$DATA_DIR/ollama/ollama-$PLATFORM"
-    
+
     if [ ! -x "$OLLAMA_BIN" ]; then
         echo -e "  ${YELLOW}[!] Ollama Engine not found!${RESET}"
         setup_provider; return
@@ -365,12 +368,12 @@ setup_ollama() {
     "$OLLAMA_BIN" serve >/dev/null 2>&1 &
     TMP_PID=$!
     sleep 2
-    
+
     MODELS=$("$OLLAMA_BIN" list 2>/dev/null | awk 'NR>1 {print $1}')
-    
+
     kill "$TMP_PID" 2>/dev/null
     wait "$TMP_PID" 2>/dev/null || true
-    
+
     if [ -z "$MODELS" ]; then
         echo -e "  ${YELLOW}[!] No local models found!${RESET}"
         sleep 2
@@ -380,7 +383,7 @@ setup_ollama() {
     idx=1
     declare -a SYS_MODELS
     echo -e "  ${CYAN}Installed Local Models:${RESET}"
-    
+
     while IFS= read -r m; do
         if [ -n "$m" ]; then
             echo -e "  ${CYAN}${idx})${RESET} $m"
@@ -393,7 +396,7 @@ setup_ollama() {
     read -p "  Select a model (1-$((idx-1))) [Enter for 1]: " SEL
     [ -z "$SEL" ] && SEL=1
     USER_MODEL="${SYS_MODELS[$SEL]}"
-    
+
     if [ -z "$USER_MODEL" ]; then
         echo -e "  ${RED}[ERROR] Invalid selection.${RESET}"
         setup_provider; return
@@ -403,6 +406,55 @@ setup_ollama() {
 CLAUDE_CODE_USE_OPENAI=1
 OPENAI_API_KEY=ollama
 OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_MODEL=${USER_MODEL}
+AI_DISPLAY_MODEL=${USER_MODEL}"
+}
+
+setup_deepseek() {
+    echo ""
+    echo -e "  ${CYAN}--- DEEPSEEK SETUP ---${RESET}"
+    echo ""
+    read -p "  Enter your DeepSeek API Key: " USER_API_KEY
+    [ -z "$USER_API_KEY" ] && echo -e "  ${RED}[ERROR] Key cannot be empty!${RESET}" && setup_deepseek && return
+    USER_API_KEY=$(echo "$USER_API_KEY" | tr -d ' ' | tr -d '\r')
+    echo -e "  ${DIM}Key: $(mask_key "$USER_API_KEY")${RESET}"
+    echo ""
+    if ! verify_key deepseek "$USER_API_KEY"; then
+        echo -e "  ${RED}[ERROR] Invalid or expired DeepSeek API Key!${RESET}"
+        setup_deepseek; return
+    fi
+    echo -e "  ${GREEN}[OK] Key Verified!${RESET}"
+    echo ""
+    echo -e "  ${CYAN}--- DEEPSEEK MODELS ---${RESET} ${DIM}(Live Fetching...)${RESET}"
+    MODELS=$(curl -sf -H "Authorization: Bearer $USER_API_KEY" https://api.deepseek.com/models 2>/dev/null | grep -Eo '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -e 's/"id"[[:space:]]*:[[:space:]]*"//g' -e 's/"//g')
+    if [ -z "$MODELS" ]; then
+        echo -e "  ${YELLOW}[API Error] Could not fetch models, using fallback...${RESET}"
+        MODELS="deepseek-v4-flash
+deepseek-v4-pro"
+    fi
+
+    idx=1
+    while IFS= read -r model; do
+        [ -z "$model" ] && continue
+        echo -e "  ${CYAN}${idx})${RESET} $model"
+        eval "MODEL_${idx}='$model'"
+        idx=$((idx+1))
+    done <<< "$MODELS"
+    echo -e "  ${CYAN}${idx})${RESET} ${DIM}Custom DeepSeek Model...${RESET}"
+    echo ""
+    read -p "  Choose a model (1-$idx) [Enter for 1]: " MODEL_SEL
+    [ -z "$MODEL_SEL" ] && MODEL_SEL=1
+    if [ "$MODEL_SEL" = "$idx" ]; then
+        read -p "  Enter custom model string: " USER_MODEL
+    else
+        eval "USER_MODEL=\$MODEL_${MODEL_SEL}"
+    fi
+    [ -z "$USER_MODEL" ] && USER_MODEL="deepseek-v4-flash"
+
+    save_env "AI_PROVIDER=openai
+CLAUDE_CODE_USE_OPENAI=1
+OPENAI_API_KEY=${USER_API_KEY}
+OPENAI_BASE_URL=https://api.deepseek.com
 OPENAI_MODEL=${USER_MODEL}
 AI_DISPLAY_MODEL=${USER_MODEL}"
 }
@@ -509,6 +561,7 @@ case "$AI_PROVIDER" in
     openai)
         if [[ "$OPENAI_BASE_URL" == *"openrouter"* ]]; then PROVIDER_NAME="OpenRouter"
         elif [[ "$OPENAI_BASE_URL" == *"integrate.api.nvidia.com"* ]]; then PROVIDER_NAME="NVIDIA NIM"
+        elif [[ "$OPENAI_BASE_URL" == *"api.deepseek.com"* ]]; then PROVIDER_NAME="DeepSeek"
         elif [[ "$OPENAI_BASE_URL" == *"api.openai.com"* ]]; then PROVIDER_NAME="OpenAI"
         elif [[ "$OPENAI_BASE_URL" == *"localhost:11434"* ]]; then PROVIDER_NAME="Ollama"
         fi ;;
@@ -545,7 +598,7 @@ else
         echo -e "   ${CYAN}4)${RESET} ${BOLD}Change Provider${RESET} ${DIM}- Switch your AI provider or API Key${RESET}"
         echo -e "   ${CYAN}5)${RESET} ${BOLD}Setup Offline${RESET}   ${DIM}- Download local AI models (Ollama)${RESET}"
         echo ""
-        
+
         # Read with a visual 10-second countdown
         LAUNCH_MODE=""
         for i in {10..1}; do

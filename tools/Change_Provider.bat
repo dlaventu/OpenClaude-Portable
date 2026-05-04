@@ -39,6 +39,7 @@ set "PROVIDER_TYPE=!AI_PROVIDER!"
 if "!AI_PROVIDER!"=="openai" (
     echo !OPENAI_BASE_URL! | findstr /C:"openrouter" >nul && set "PROVIDER_TYPE=openrouter"
     echo !OPENAI_BASE_URL! | findstr /C:"integrate.api.nvidia.com" >nul && set "PROVIDER_TYPE=nvidia"
+    echo !OPENAI_BASE_URL! | findstr /C:"api.deepseek.com" >nul && set "PROVIDER_TYPE=deepseek"
 )
 echo   - Provider : !GREEN!!PROVIDER_TYPE!!RESET!
 echo   - Model    : !GREEN!!AI_DISPLAY_MODEL!!RESET!
@@ -61,6 +62,7 @@ echo.
 echo   !BOLD!--- CHANGE MODEL ---!RESET!
 if "!PROVIDER_TYPE!"=="openrouter" goto mode_openrouter
 if "!PROVIDER_TYPE!"=="nvidia" goto mode_nvidia
+if "!PROVIDER_TYPE!"=="deepseek" goto mode_deepseek
 if "!PROVIDER_TYPE!"=="gemini" goto mode_gemini
 
 :mode_default
@@ -70,6 +72,41 @@ if not "!NEW_MODEL!"=="" (
     if "!AI_PROVIDER!"=="openai" set "OPENAI_MODEL=!NEW_MODEL!"
     if "!AI_PROVIDER!"=="ollama" set "OPENAI_MODEL=!NEW_MODEL!"
     if "!AI_PROVIDER!"=="anthropic" set "ANTHROPIC_MODEL=!NEW_MODEL!"
+)
+goto save_and_exit
+
+:mode_deepseek
+echo   !CYAN!--- DEEPSEEK MODELS ---!RESET! !DIM!(Live Fetching...)!RESET!
+set "idx=1"
+set "FETCH_CMD=$headers = @{ 'Authorization' = 'Bearer !OPENAI_API_KEY!' }; try { $d = (Invoke-RestMethod -Uri 'https://api.deepseek.com/models' -Headers $headers).data; $d | Select-Object -ExpandProperty id } catch { }"
+for /f "delims=" %%I in ('powershell -NoProfile -Command "!FETCH_CMD!"') do (
+    set "MODEL_!idx!=%%I"
+    echo   !CYAN!!idx!^)!RESET! %%I
+    set /a "idx+=1"
+)
+if "!idx!"=="1" (
+    echo   !YELLOW![API Error] Could not fetch models, using fallback...!RESET!
+    set "MODEL_1=deepseek-v4-flash"
+    echo   !CYAN!1^)!RESET! deepseek-v4-flash
+    set "MODEL_2=deepseek-v4-pro"
+    echo   !CYAN!2^)!RESET! deepseek-v4-pro
+    set /a "idx=3"
+)
+set "MAX_IDX=!idx!"
+echo   !CYAN!!MAX_IDX!^)!RESET! Custom Model...
+
+set "NEW_MODEL="
+set /p "MODEL_SEL=  Choose a model (1-!MAX_IDX!) [Enter for 1]: "
+if not defined MODEL_SEL set "MODEL_SEL=1"
+if "!MODEL_SEL!"=="" set "MODEL_SEL=1"
+if "!MODEL_SEL!"=="!MAX_IDX!" (
+    set /p "NEW_MODEL=  Enter custom model string: "
+) else (
+    for %%V in (!MODEL_SEL!) do set "NEW_MODEL=!MODEL_%%V!"
+)
+if not "!NEW_MODEL!"=="" (
+    set "OPENAI_MODEL=!NEW_MODEL!"
+    set "AI_DISPLAY_MODEL=!NEW_MODEL!"
 )
 goto save_and_exit
 
@@ -201,6 +238,8 @@ if "!PROVIDER_TYPE!"=="openrouter" (
     powershell -NoProfile -Command "$headers = @{ 'x-api-key' = '!NEW_KEY!'; 'anthropic-version' = '2023-06-01' }; try { Invoke-RestMethod -Uri 'https://api.anthropic.com/v1/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
 ) else if "!PROVIDER_TYPE!"=="nvidia" (
     powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !NEW_KEY!' }; try { Invoke-RestMethod -Uri 'https://integrate.api.nvidia.com/v1/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
+) else if "!PROVIDER_TYPE!"=="deepseek" (
+    powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !NEW_KEY!' }; try { Invoke-RestMethod -Uri 'https://api.deepseek.com/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
 ) else if "!PROVIDER_TYPE!"=="openai" (
     powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !NEW_KEY!' }; try { Invoke-RestMethod -Uri 'https://api.openai.com/v1/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
 )
@@ -224,7 +263,7 @@ goto save_and_exit
     echo # ========================================================
     echo AI_PROVIDER=!AI_PROVIDER!
     echo AI_DISPLAY_MODEL=!AI_DISPLAY_MODEL!
-    
+
     if "!AI_PROVIDER!"=="openai" (
         echo CLAUDE_CODE_USE_OPENAI=!CLAUDE_CODE_USE_OPENAI!
         echo OPENAI_API_KEY=!OPENAI_API_KEY!

@@ -765,16 +765,31 @@ const server = createServer(async (req, res) => {
             return sendJSON(res, 200, { models });
         }
 
+        // DeepSeek Models
+        if (url.pathname === '/api/deepseek/models' && req.method === 'POST') {
+            const { key } = await readBody(req);
+            const fallback = ['deepseek-v4-flash', 'deepseek-v4-pro'];
+            try {
+                const result = await fetchExternal('https://api.deepseek.com/models', { 'Authorization': `Bearer ${key}` });
+                const parsed = JSON.parse(result.data);
+                const models = (parsed.data || []).map(m => m.id).filter(Boolean);
+                return sendJSON(res, 200, { models: models.length ? models : fallback });
+            } catch {
+                return sendJSON(res, 200, { models: fallback });
+            }
+        }
+
         // Verify Key
         if (url.pathname === '/api/verify-key' && req.method === 'POST') {
             const { provider, key } = await readBody(req);
             let valid = false;
             if (provider === 'openrouter') { const r = await fetchExternal('https://openrouter.ai/api/v1/auth/key', { 'Authorization': `Bearer ${key}` }); valid = r.status === 200; }
             else if (provider === 'nvidia') { const r = await fetchExternal('https://integrate.api.nvidia.com/v1/models', { 'Authorization': `Bearer ${key}` }); valid = r.status === 200; }
+            else if (provider === 'deepseek') { const r = await fetchExternal('https://api.deepseek.com/models', { 'Authorization': `Bearer ${key}` }); valid = r.status === 200; }
             else if (provider === 'gemini') { const r = await fetchExternal(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`); valid = r.status === 200; }
             else if (provider === 'anthropic') { const r = await fetchExternal('https://api.anthropic.com/v1/models', { 'x-api-key': key, 'anthropic-version': '2023-06-01' }); valid = r.status === 200; }
             else if (provider === 'openai') { const r = await fetchExternal('https://api.openai.com/v1/models', { 'Authorization': `Bearer ${key}` }); valid = r.status === 200; }
-            else if (provider === 'ollama') { 
+            else if (provider === 'ollama') {
                 try { const r = await fetchExternal('http://127.0.0.1:11434/api/tags'); valid = r.status === 200; } catch { valid = false; }
             }
             return sendJSON(res, 200, { valid });
@@ -790,7 +805,7 @@ const server = createServer(async (req, res) => {
             } catch {}
             return sendJSON(res, 200, out);
         }
-        
+
         if (url.pathname === '/api/ollama/models' && req.method === 'GET') {
             const models = [];
             const txtPath = join(DATA_DIR, 'models', 'installed-models.txt');
@@ -839,7 +854,7 @@ const server = createServer(async (req, res) => {
                 return sendJSON(res, 500, { error: e.message });
             }
         }
-        
+
         if (url.pathname === '/api/ollama/stop' && req.method === 'POST') {
             try {
                 if (IS_WIN) execSync('taskkill /F /IM ollama.exe', { stdio: 'ignore' });

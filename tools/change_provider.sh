@@ -26,6 +26,7 @@ verify_key() {
         gemini)     curl -sf "https://generativelanguage.googleapis.com/v1beta/models?key=$key" > /dev/null 2>&1 ;;
         anthropic)  curl -sf -H "x-api-key: $key" -H "anthropic-version: 2023-06-01" https://api.anthropic.com/v1/models > /dev/null 2>&1 ;;
         nvidia)     curl -sf -H "Authorization: Bearer $key" https://integrate.api.nvidia.com/v1/models > /dev/null 2>&1 ;;
+        deepseek)   curl -sf -H "Authorization: Bearer $key" https://api.deepseek.com/models > /dev/null 2>&1 ;;
         openai)     curl -sf -H "Authorization: Bearer $key" https://api.openai.com/v1/models > /dev/null 2>&1 ;;
         *)          return 0 ;;
     esac
@@ -115,6 +116,16 @@ fetch_nvidia_models() {
     echo "$MODELS"
 }
 
+fetch_deepseek_models() {
+    echo -e "  ${CYAN}--- DEEPSEEK MODELS ---${RESET} ${DIM}(Live Fetching...)${RESET}"
+    MODELS=$(curl -sf -H "Authorization: Bearer $OPENAI_API_KEY" https://api.deepseek.com/models 2>/dev/null | grep -Eo '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -e 's/"id"[[:space:]]*:[[:space:]]*"//g' -e 's/"//g')
+    if [ -z "$MODELS" ]; then
+        MODELS="deepseek-v4-flash
+deepseek-v4-pro"
+    fi
+    echo "$MODELS"
+}
+
 fetch_gemini_models() {
     echo -e "  ${CYAN}--- GEMINI MODELS ---${RESET} ${DIM}(Live + Previews)${RESET}"
     MODELS=$(curl -sf "https://generativelanguage.googleapis.com/v1alpha/models?key=$GEMINI_API_KEY" 2>/dev/null | grep -Eo '"name"[[:space:]]*:[[:space:]]*"models/gemini-[^"]*"' | sed -e 's/"name"[[:space:]]*:[[:space:]]*"models\///g' -e 's/"//g' | grep -vE 'vision|embedding|banana|lyria|robot|research|computer' | head -40)
@@ -137,6 +148,7 @@ PROVIDER_TYPE="$AI_PROVIDER"
 if [ "$AI_PROVIDER" = "openai" ]; then
     if [[ "$OPENAI_BASE_URL" == *"openrouter"* ]]; then PROVIDER_TYPE="openrouter"
     elif [[ "$OPENAI_BASE_URL" == *"integrate.api.nvidia.com"* ]]; then PROVIDER_TYPE="nvidia"
+    elif [[ "$OPENAI_BASE_URL" == *"api.deepseek.com"* ]]; then PROVIDER_TYPE="deepseek"
     fi
 fi
 
@@ -196,6 +208,29 @@ case "$OPTION" in
                     done <<< "$MODELS"
                     echo -e "  ${CYAN}${idx})${RESET} Custom Model..."
                     read -p "  Choose a model (1-$idx): " MODEL_SEL
+                    if [ "$MODEL_SEL" = "$idx" ]; then
+                        read -p "  Enter custom model string: " NEW_MODEL
+                    else
+                        eval "NEW_MODEL=\$MODEL_${MODEL_SEL}"
+                    fi
+                fi
+                [ -n "$NEW_MODEL" ] && OPENAI_MODEL="$NEW_MODEL" && AI_DISPLAY_MODEL="$NEW_MODEL"
+                ;;
+            deepseek)
+                MODELS=$(fetch_deepseek_models)
+                if [ -z "$MODELS" ]; then
+                    read -p "  Could not fetch models. Enter string manually: " NEW_MODEL
+                else
+                    idx=1
+                    while IFS= read -r model; do
+                        [ -z "$model" ] && continue
+                        echo -e "  ${CYAN}${idx})${RESET} $model"
+                        eval "MODEL_${idx}='$model'"
+                        idx=$((idx+1))
+                    done <<< "$MODELS"
+                    echo -e "  ${CYAN}${idx})${RESET} Custom Model..."
+                    read -p "  Choose a model (1-$idx) [Enter for 1]: " MODEL_SEL
+                    [ -z "$MODEL_SEL" ] && MODEL_SEL=1
                     if [ "$MODEL_SEL" = "$idx" ]; then
                         read -p "  Enter custom model string: " NEW_MODEL
                     else

@@ -459,6 +459,7 @@ select{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%
             <div class="provider-grid">
               <div class="provider-option" data-provider="openrouter" onclick="selectProvider(this)"><div class="icon">🌐</div><div class="name">OpenRouter</div><div class="desc">200+ models</div></div>
               <div class="provider-option" data-provider="nvidia" onclick="selectProvider(this)"><div class="icon">🟢</div><div class="name">NVIDIA NIM</div><div class="desc">Free GPU AI</div></div>
+              <div class="provider-option" data-provider="deepseek" onclick="selectProvider(this)"><div class="icon">DS</div><div class="name">DeepSeek</div><div class="desc">Coding API</div></div>
               <div class="provider-option" data-provider="gemini" onclick="selectProvider(this)"><div class="icon">💎</div><div class="name">Gemini</div><div class="desc">Google API</div></div>
               <div class="provider-option" data-provider="anthropic" onclick="selectProvider(this)"><div class="icon">🧠</div><div class="name">Claude</div><div class="desc">Anthropic API</div></div>
               <div class="provider-option" data-provider="ollama" onclick="selectProvider(this)"><div class="icon">🖥️</div><div class="name">Ollama</div><div class="desc">Local</div></div>
@@ -608,8 +609,8 @@ let currentMode = 'normal';
 let modeLocked = false;
 let agentMode = false;
 let workDir = '';
-const defaults = { gemini:'gemini-2.0-pro-exp-02-05', anthropic:'claude-3-7-sonnet-20250219', ollama:'llama3.2:3b', openai:'gpt-4o', nvidia:'meta/llama-3.1-70b-instruct' };
-const providerNames = { openrouter:'OpenRouter', gemini:'Gemini', anthropic:'Claude', ollama:'Ollama', openai:'OpenAI', nvidia:'NVIDIA NIM' };
+const defaults = { gemini:'gemini-2.0-pro-exp-02-05', anthropic:'claude-3-7-sonnet-20250219', ollama:'llama3.2:3b', openai:'gpt-4o', nvidia:'meta/llama-3.1-70b-instruct', deepseek:'deepseek-v4-flash' };
+const providerNames = { openrouter:'OpenRouter', gemini:'Gemini', anthropic:'Claude', ollama:'Ollama', openai:'OpenAI', nvidia:'NVIDIA NIM', deepseek:'DeepSeek' };
 
 // ─── Init ────────────────────────────────────────────────────
 (async function init() {
@@ -633,8 +634,9 @@ async function loadConfig() {
     const isConfigured = !!cfg.AI_PROVIDER;
     document.getElementById('noConfigBanner').style.display = isConfigured ? 'none' : 'flex';
 
-    const pName = cfg.AI_PROVIDER === 'openai' && cfg.OPENAI_BASE_URL?.includes('openrouter') ? 'OpenRouter' : 
-                  cfg.AI_PROVIDER === 'openai' && cfg.OPENAI_BASE_URL?.includes('integrate.api.nvidia.com') ? 'NVIDIA NIM' : 
+    const pName = cfg.AI_PROVIDER === 'openai' && cfg.OPENAI_BASE_URL?.includes('openrouter') ? 'OpenRouter' :
+                  cfg.AI_PROVIDER === 'openai' && cfg.OPENAI_BASE_URL?.includes('integrate.api.nvidia.com') ? 'NVIDIA NIM' :
+                  cfg.AI_PROVIDER === 'openai' && cfg.OPENAI_BASE_URL?.includes('api.deepseek.com') ? 'DeepSeek' :
                   cfg.AI_PROVIDER === 'ollama' ? 'Local AI' :
                   providerNames[cfg.AI_PROVIDER] || cfg.AI_PROVIDER || '—';
     const model = cfg.AI_DISPLAY_MODEL || cfg.OPENAI_MODEL || '—';
@@ -1336,13 +1338,15 @@ async function initModelStep(){
   const isOR=setupState.provider==='openrouter';
   const isOllama=setupState.provider==='ollama';
   const isNvidia=setupState.provider==='nvidia';
+  const isDeepSeek=setupState.provider==='deepseek';
   document.getElementById('tierToggle').style.display=isOR?'':'none';
-  document.getElementById('modelSearchWrap').style.display=(isOR||isOllama||isNvidia)?'':'none';
+  document.getElementById('modelSearchWrap').style.display=(isOR||isOllama||isNvidia||isDeepSeek)?'':'none';
   document.getElementById('modelSearch').style.display=isOllama?'none':'';
   document.getElementById('manualModelWrap').style.display=''; // Always show custom input
   if(isOR) fetchModels(setupState.tier);
   else if(isOllama) await fetchOllamaModels();
   else if(isNvidia) await fetchNvidiaModels();
+  else if(isDeepSeek) await fetchDeepSeekModels();
   else { document.getElementById('manualModel').placeholder=`Default: ${defaults[setupState.provider]||''}`; }
 }
 
@@ -1387,6 +1391,22 @@ async function fetchNvidiaModels() {
   loadEl.style.display='none';
 }
 
+async function fetchDeepSeekModels() {
+  const listEl=document.getElementById('modelList');
+  const loadEl=document.getElementById('modelLoading');
+  listEl.innerHTML='';loadEl.style.display='flex';
+  try{
+    const res=await fetch(`${API}/api/deepseek/models`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:setupState.key})});
+    const d=await res.json();
+    allModels=(d.models&&d.models.length)?d.models:['deepseek-v4-flash','deepseek-v4-pro'];
+    renderModels(allModels);
+  }catch{
+    allModels=['deepseek-v4-flash','deepseek-v4-pro'];
+    renderModels(allModels);
+  }
+  loadEl.style.display='none';
+}
+
 async function fetchModels(tier){
   const listEl=document.getElementById('modelList');
   const loadEl=document.getElementById('modelLoading');
@@ -1422,6 +1442,7 @@ async function saveConfig(){
   let config={};
   if(setupState.provider==='openrouter')config={AI_PROVIDER:'openai',CLAUDE_CODE_USE_OPENAI:'1',OPENAI_API_KEY:setupState.key,OPENAI_BASE_URL:'https://openrouter.ai/api/v1',OPENAI_MODEL:setupState.model,AI_DISPLAY_MODEL:setupState.model};
   else if(setupState.provider==='nvidia')config={AI_PROVIDER:'openai',CLAUDE_CODE_USE_OPENAI:'1',OPENAI_API_KEY:setupState.key,OPENAI_BASE_URL:'https://integrate.api.nvidia.com/v1',OPENAI_MODEL:setupState.model,AI_DISPLAY_MODEL:setupState.model};
+  else if(setupState.provider==='deepseek')config={AI_PROVIDER:'openai',CLAUDE_CODE_USE_OPENAI:'1',OPENAI_API_KEY:setupState.key,OPENAI_BASE_URL:'https://api.deepseek.com',OPENAI_MODEL:setupState.model,AI_DISPLAY_MODEL:setupState.model};
   else if(setupState.provider==='gemini')config={AI_PROVIDER:'gemini',GEMINI_API_KEY:setupState.key,AI_DISPLAY_MODEL:setupState.model};
   else if(setupState.provider==='anthropic')config={AI_PROVIDER:'anthropic',ANTHROPIC_API_KEY:setupState.key,AI_DISPLAY_MODEL:setupState.model};
   else if(setupState.provider==='ollama')config={AI_PROVIDER:'ollama',CLAUDE_CODE_USE_OPENAI:'1',OPENAI_API_KEY:'ollama',OPENAI_BASE_URL:'http://localhost:11434/v1',OPENAI_MODEL:setupState.model,AI_DISPLAY_MODEL:setupState.model};
@@ -1447,21 +1468,21 @@ async function loadSystemInfo(){
     document.getElementById('sysEngine').textContent=d.engineVersion||'Not installed';
     document.getElementById('sysGit').innerHTML=d.hasGit?`<span class="badge badge-success">${d.portableGit?'USB':'System'}</span>`:'<span class="badge badge-error">Not found</span>';
     document.getElementById('sysPython').innerHTML=d.hasPython?`<span class="badge badge-success">${d.portablePython?'USB':'System'}</span>`:'<span class="badge badge-error">Not found</span>';
-    
+
     if (d.ollamaInstalled) {
        document.getElementById('cardOllama').style.display='block';
        try {
          const oRes = await fetch(`${API}/api/ollama/status`);
          const oData = await oRes.json();
          document.getElementById('sysOllamaStatus').innerHTML = oData.running ? '<span class="badge badge-success">Running</span>' : '<span class="badge badge-error">Stopped</span>';
-         
+
          const actionsEl = document.getElementById('sysOllamaActions');
          if (oData.running) {
              actionsEl.innerHTML = `<button class="btn btn-outline" style="padding:5px 12px;font-size:0.75rem" onclick="toggleOllama('stop')">Stop</button>`;
          } else {
              actionsEl.innerHTML = `<button class="btn btn-primary" style="padding:5px 12px;font-size:0.75rem" onclick="toggleOllama('start')">Start</button>`;
          }
-         
+
          const mRes = await fetch(`${API}/api/ollama/models`);
          const mData = await mRes.json();
          if(mData.models && mData.models.length>0) {

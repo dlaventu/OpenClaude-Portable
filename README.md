@@ -1,6 +1,6 @@
 # OpenClaude — Portable AI Coding Agent
 
-> **Run a full-featured AI coding agent from a USB drive or any folder — no installation required.**  
+> **Run a full-featured AI coding agent from a USB drive or any folder — no installation required.**
 > Plug in. Launch. Code. Take it anywhere.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -25,7 +25,7 @@ Everything runs strictly inside the project folder. No files are written to the 
 
 | Feature | Details |
 |---|---|
-| **6 AI Providers** | NVIDIA NIM · OpenRouter · Google Gemini · Anthropic Claude · OpenAI · Ollama (offline) |
+| **7 AI Providers** | NVIDIA NIM · DeepSeek · OpenRouter · Google Gemini · Anthropic Claude · OpenAI · Ollama (offline) |
 | **Zero Footprint** | All data, keys, and logs stay inside `data/` — nothing touches the host system |
 | **Local Speed Proxy** | Trims system prompts by up to 90% before sending to Ollama, dramatically improving response time on CPU-only hardware |
 | **Auto-Update Cache** | Checks for engine updates once per day (skips the network call on repeat launches) |
@@ -113,6 +113,7 @@ The menu auto-selects **Normal Mode** after 10 seconds if no key is pressed.
 | Provider | Cost | API Key |
 |---|---|---|
 | **NVIDIA NIM** | Free tier (1 000 credits/month) | [build.nvidia.com](https://build.nvidia.com) |
+| **DeepSeek** | Paid API | [platform.deepseek.com](https://platform.deepseek.com) |
 | **OpenRouter** | Free + paid models | [openrouter.ai](https://openrouter.ai) |
 | **Google Gemini** | Free tier available | [aistudio.google.com](https://aistudio.google.com) |
 | **Anthropic Claude** | Paid | [console.anthropic.com](https://console.anthropic.com) |
