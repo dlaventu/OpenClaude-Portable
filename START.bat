@@ -222,22 +222,24 @@ echo !CYAN!=========================================================!RESET!
 echo.
 echo   !CYAN!1)!RESET! !BOLD!OpenRouter!RESET!   !DIM!- 200+ Free and Paid Models!RESET!  !GREEN![RECOMMENDED]!RESET!
 echo   !CYAN!2)!RESET! !BOLD!NVIDIA NIM!RESET!   !DIM!- High-Speed GPU Free Tier!RESET!   !GREEN![RECOMMENDED]!RESET!
-echo   !CYAN!3)!RESET! !BOLD!Gemini!RESET!       !DIM!- Google AI API!RESET!
-echo   !CYAN!4)!RESET! !BOLD!Claude!RESET!       !DIM!- Anthropic API!RESET!
-echo   !CYAN!5)!RESET! !BOLD!OpenAI!RESET!       !DIM!- GPT / Codex API!RESET!
-echo   !CYAN!6)!RESET! !BOLD!Ollama!RESET!       !DIM!- Local Offline AI (No internet)!RESET!
+echo   !CYAN!3)!RESET! !BOLD!DeepSeek!RESET!     !DIM!- DeepSeek API (OpenAI-compatible)!RESET!
+echo   !CYAN!4)!RESET! !BOLD!Gemini!RESET!       !DIM!- Google AI API!RESET!
+echo   !CYAN!5)!RESET! !BOLD!Claude!RESET!       !DIM!- Anthropic API!RESET!
+echo   !CYAN!6)!RESET! !BOLD!OpenAI!RESET!       !DIM!- GPT / Codex API!RESET!
+echo   !CYAN!7)!RESET! !BOLD!Ollama!RESET!       !DIM!- Local Offline AI (No internet)!RESET!
 echo.
 :prompt_provider
 set "PROVIDER_SEL="
-set /p "PROVIDER_SEL=  Select your provider !CYAN!(1-6)!RESET!: "
+set /p "PROVIDER_SEL=  Select your provider !CYAN!(1-7)!RESET!: "
 
 if "!PROVIDER_SEL!"=="1" goto setup_openrouter
 if "!PROVIDER_SEL!"=="2" goto setup_nvidia
-if "!PROVIDER_SEL!"=="3" goto setup_gemini
-if "!PROVIDER_SEL!"=="4" goto setup_claude
-if "!PROVIDER_SEL!"=="5" goto setup_openai
-if "!PROVIDER_SEL!"=="6" goto setup_ollama
-echo   !RED![ERROR] Invalid selection. Please choose 1-6.!RESET!
+if "!PROVIDER_SEL!"=="3" goto setup_deepseek
+if "!PROVIDER_SEL!"=="4" goto setup_gemini
+if "!PROVIDER_SEL!"=="5" goto setup_claude
+if "!PROVIDER_SEL!"=="6" goto setup_openai
+if "!PROVIDER_SEL!"=="7" goto setup_ollama
+echo   !RED![ERROR] Invalid selection. Please choose 1-7.!RESET!
 goto prompt_provider
 
 :: ---------------------------------------------------------
@@ -348,7 +350,7 @@ goto save_settings_openrouter
 :save_settings_openrouter
 (
     echo # ========================================================
-    echo # Portable AI - Master Switchboard 
+    echo # Portable AI - Master Switchboard
     echo # ========================================================
     echo AI_PROVIDER=openai
     echo CLAUDE_CODE_USE_OPENAI=1
@@ -437,6 +439,72 @@ if "!USER_MODEL!"=="" (
     echo CLAUDE_CODE_USE_OPENAI=1
     echo OPENAI_API_KEY=%USER_API_KEY%
     echo OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1
+    echo OPENAI_MODEL=%USER_MODEL%
+    echo AI_DISPLAY_MODEL=%USER_MODEL%
+) > "%ENV_FILE%"
+goto finish_setup
+
+:: ---------------------------------------------------------
+::   DEEPSEEK SETUP
+:: ---------------------------------------------------------
+:setup_deepseek
+echo.
+echo   !CYAN!--- DEEPSEEK SETUP ---!RESET!
+echo.
+set /p "USER_API_KEY=  Enter your DeepSeek API Key: "
+if "!USER_API_KEY!"=="" (
+    echo   !RED![ERROR] API Key cannot be empty!!RESET!
+    goto setup_deepseek
+)
+set "USER_API_KEY=!USER_API_KEY: =!"
+set "KEY_MASK=!USER_API_KEY:~0,6!****!USER_API_KEY:~-4!"
+echo   !DIM!Key: !KEY_MASK!!RESET!
+echo.
+echo   !YELLOW![~] Verifying API Key... Please wait...!RESET!
+powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !USER_API_KEY!' }; try { $response = Invoke-RestMethod -Uri 'https://api.deepseek.com/models' -Headers $headers -ErrorAction Stop; exit 0 } catch { exit 1 }"
+if errorlevel 1 (
+    echo   !RED![ERROR] Invalid or expired DeepSeek API Key!!RESET!
+    goto setup_deepseek
+)
+echo   !GREEN![OK] Key Verified!!RESET!
+echo.
+echo   !CYAN!--- DEEPSEEK MODELS ---!RESET! !DIM!(Live Fetching...)!RESET!
+set "idx=1"
+for /f "delims=" %%I in ('powershell -NoProfile -Command "$headers = @{ 'Authorization' = 'Bearer !USER_API_KEY!' }; try { $d = (Invoke-RestMethod -Uri 'https://api.deepseek.com/models' -Headers $headers).data; $d | Select-Object -ExpandProperty id } catch { }"') do (
+    set "DEEPSEEK_MODEL_!idx!=%%I"
+    echo   !CYAN!!idx!^)!RESET! %%I
+    set /a "idx+=1"
+)
+if "!idx!"=="1" (
+    echo   !YELLOW![API Error] Could not fetch models, using fallback...!RESET!
+    set "DEEPSEEK_MODEL_1=deepseek-v4-flash"
+    echo   !CYAN!1^)!RESET! deepseek-v4-flash
+    set "DEEPSEEK_MODEL_2=deepseek-v4-pro"
+    echo   !CYAN!2^)!RESET! deepseek-v4-pro
+    set /a "idx=3"
+)
+set "MAX_IDX=!idx!"
+echo   !CYAN!!MAX_IDX!^)!RESET! !DIM!Custom DeepSeek Model...!RESET!
+echo.
+:prompt_deepseek_sel
+set "MODEL_SEL="
+set /p "MODEL_SEL=  Choose a model !CYAN!(1-!MAX_IDX!)!RESET! [Enter for 1]: "
+if not defined MODEL_SEL set "MODEL_SEL=1"
+if "!MODEL_SEL!"=="" set "MODEL_SEL=1"
+if "!MODEL_SEL!"=="!MAX_IDX!" (
+    set /p "USER_MODEL=  Enter custom model string: "
+) else (
+    for %%V in (!MODEL_SEL!) do set "USER_MODEL=!DEEPSEEK_MODEL_%%V!"
+)
+if "!USER_MODEL!"=="" (
+    echo   !RED![ERROR] Invalid selection.!RESET!
+    goto prompt_deepseek_sel
+)
+(
+    echo AI_PROVIDER=openai
+    echo CLAUDE_CODE_USE_OPENAI=1
+    echo OPENAI_API_KEY=%USER_API_KEY%
+    echo OPENAI_BASE_URL=https://api.deepseek.com
     echo OPENAI_MODEL=%USER_MODEL%
     echo AI_DISPLAY_MODEL=%USER_MODEL%
 ) > "%ENV_FILE%"
@@ -619,6 +687,7 @@ if "!AI_PROVIDER!"=="openai" (
     if defined OPENAI_BASE_URL (
         echo !OPENAI_BASE_URL! | findstr /C:"openrouter" >nul && set "PROVIDER_NAME=OpenRouter"
         echo !OPENAI_BASE_URL! | findstr /C:"integrate.api.nvidia.com" >nul && set "PROVIDER_NAME=NVIDIA NIM"
+        echo !OPENAI_BASE_URL! | findstr /C:"api.deepseek.com" >nul && set "PROVIDER_NAME=DeepSeek"
         echo !OPENAI_BASE_URL! | findstr /C:"api.openai.com" >nul && set "PROVIDER_NAME=OpenAI"
         echo !OPENAI_BASE_URL! | findstr /C:"localhost:11434" >nul && set "PROVIDER_NAME=Ollama"
     )
