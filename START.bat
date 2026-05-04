@@ -23,6 +23,11 @@ set "NODE_DIR=%ENGINE_DIR%\%NODE_DIR_NAME%"
 set "GIT_VERSION=2.54.0"
 set "GIT_DIR_NAME=git-win-x64"
 set "GIT_DIR=%ENGINE_DIR%\%GIT_DIR_NAME%"
+set "GIT_BASH=%GIT_DIR%\bin\bash.exe"
+set "GIT_EXE=%GIT_DIR%\bin\git.exe"
+set "OPENCLAUDE_DIR=%ENGINE_DIR%\node_modules\@gitlawb\openclaude"
+set "OC_BIN=%OPENCLAUDE_DIR%\bin\openclaude"
+set "OC_CLI=%OPENCLAUDE_DIR%\dist\cli.mjs"
 
 :: 1. Force the portable AI to save logs/memory strictly to the USB
 set "CLAUDE_CONFIG_DIR=%DATA_DIR%\openclaude"
@@ -48,6 +53,33 @@ echo.
 
 if not exist "%ENGINE_DIR%" mkdir "%ENGINE_DIR%"
 
+goto after_install_engine_func
+:install_engine
+set "INSTALL_ACTION=%~1"
+if "%INSTALL_ACTION%"=="" set "INSTALL_ACTION=Installing"
+echo   !YELLOW![~] !INSTALL_ACTION! OpenClaude Engine...!RESET!
+echo   !DIM!    This can take several minutes on slower USB drives or networks.!RESET!
+pushd "%ENGINE_DIR%"
+call npm.cmd install @gitlawb/openclaude@latest --no-audit --no-fund --loglevel=warn --no-bin-links
+set "NPM_STATUS=!ERRORLEVEL!"
+popd
+if not "!NPM_STATUS!"=="0" (
+    echo   !RED![ERROR] OpenClaude Engine install failed ^(npm exit !NPM_STATUS!^).!RESET!
+    pause
+    exit /b 1
+)
+if not exist "%OC_BIN%" goto incomplete_engine
+if not exist "%OC_CLI%" goto incomplete_engine
+echo   !GREEN![OK] Engine installed!!RESET!
+exit /b 0
+
+:incomplete_engine
+echo   !RED![ERROR] OpenClaude Engine install is incomplete.!RESET!
+echo   !DIM!        Missing expected files under %OPENCLAUDE_DIR%!RESET!
+pause
+exit /b 1
+:after_install_engine_func
+
 :: 2. Check Node.js
 if not exist "%NODE_DIR%\node.exe" (
     echo   !YELLOW![~] Node.js not found for Windows-x64. Downloading...!RESET!
@@ -58,7 +90,15 @@ if not exist "%NODE_DIR%\node.exe" (
         exit /b 1
     )
     echo   !YELLOW![~] Extracting Node.js...!RESET!
+    echo   !DIM!    This can be silent for a few minutes on external drives.!RESET!
+    if exist "%NODE_DIR%" rmdir /s /q "%NODE_DIR%"
     powershell -NoProfile -Command "Expand-Archive -Path '%ENGINE_DIR%\node.zip' -DestinationPath '%ENGINE_DIR%' -Force"
+    if errorlevel 1 (
+        echo   !RED![ERROR] Failed to extract Node.js!!RESET!
+        del "%ENGINE_DIR%\node.zip" >nul 2>&1
+        pause
+        exit /b 1
+    )
     ren "%ENGINE_DIR%\node-v%NODE_VERSION%-win-x64" "%NODE_DIR_NAME%"
     del "%ENGINE_DIR%\node.zip"
     echo   !GREEN![OK] Node.js installed to %NODE_DIR%!RESET!
@@ -66,16 +106,28 @@ if not exist "%NODE_DIR%\node.exe" (
 
 set "PATH=%NODE_DIR%;%PATH%"
 
-if not exist "%ENGINE_DIR%\node_modules\@gitlawb\openclaude" (
-    echo   !YELLOW![~] Installing OpenClaude Engine...!RESET!
-    pushd "%ENGINE_DIR%"
-    call npm.cmd install @gitlawb/openclaude@latest --no-audit --no-fund --loglevel=error --no-bin-links
-    echo   !GREEN![OK] Engine installed!!RESET!
-    popd
+if not exist "%OC_BIN%" goto repair_engine
+if not exist "%OC_CLI%" goto repair_engine
+goto engine_ready
+:repair_engine
+if exist "%OPENCLAUDE_DIR%" (
+    echo   !YELLOW![~] Incomplete OpenClaude Engine detected. Reinstalling...!RESET!
+    rmdir /s /q "%OPENCLAUDE_DIR%"
 )
+call :install_engine "Installing"
+if errorlevel 1 exit /b 1
+:engine_ready
 
 :: 2.1 Check GitPortable
-if not exist "%GIT_DIR%\git-cmd.exe" (
+if not exist "%GIT_BASH%" goto repair_git
+if not exist "%GIT_EXE%" goto repair_git
+goto git_ready
+:repair_git
+if exist "%GIT_DIR%" (
+    echo   !YELLOW![~] Incomplete GitPortable detected. Reinstalling...!RESET!
+    rmdir /s /q "%GIT_DIR%"
+)
+if not exist "%GIT_BASH%" (
     echo   !YELLOW![~] GitPortable not found for Windows-x64. Downloading...!RESET!
 	curl.exe -L "https://github.com/git-for-windows/git/releases/download/v%GIT_VERSION%.windows.1/PortableGit-%GIT_VERSION%-64-bit.7z.exe" -o "%ENGINE_DIR%\GitPortable.exe"
     if errorlevel 1 (
@@ -84,12 +136,30 @@ if not exist "%GIT_DIR%\git-cmd.exe" (
         exit /b 1
     )
     echo   !YELLOW![~] Extracting GitPortable...!RESET!
-    %ENGINE_DIR%\GitPortable -o%ENGINE_DIR%\%GIT_DIR_NAME% -y
+    echo   !DIM!    This can be silent for a few minutes on external drives.!RESET!
+    "%ENGINE_DIR%\GitPortable.exe" -o"%GIT_DIR%" -y
+    if errorlevel 1 (
+        echo   !RED![ERROR] Failed to extract GitPortable!!RESET!
+        del "%ENGINE_DIR%\GitPortable.exe" >nul 2>&1
+        pause
+        exit /b 1
+    )
     del "%ENGINE_DIR%\GitPortable.exe"
+    if not exist "%GIT_BASH%" goto incomplete_git
+    if not exist "%GIT_EXE%" goto incomplete_git
     echo   !GREEN![OK] GitPortable installed to %GIT_DIR%!RESET!
 )
 
-set "CLAUDE_CODE_GIT_BASH_PATH=%GIT_DIR%\bin\bash.exe"
+goto git_ready
+:incomplete_git
+echo   !RED![ERROR] GitPortable install is incomplete.!RESET!
+echo   !DIM!        Missing expected files under %GIT_DIR%\bin!RESET!
+pause
+exit /b 1
+:git_ready
+set "CLAUDE_CODE_GIT_BASH_PATH=%GIT_BASH%"
+set "GIT_BASH=%GIT_BASH%"
+set "PATH=%GIT_DIR%\cmd;%GIT_DIR%\bin;%GIT_DIR%\usr\bin;%PATH%"
 
 :: 3. Check for flags (--offline, --quick)
 set "SKIP_UPDATE=0"
@@ -120,7 +190,8 @@ if !SKIP_UPDATE!==1 (
         call npm.cmd outdated @gitlawb/openclaude >nul 2>&1
         if errorlevel 1 (
             echo   !YELLOW![~] New version detected! Upgrading...!RESET!
-            call npm.cmd install @gitlawb/openclaude@latest --no-audit --no-fund --loglevel=error --no-bin-links >nul 2>&1
+            call :install_engine "Upgrading"
+            if errorlevel 1 exit /b 1
             echo   !GREEN![OK] Engine upgraded to latest version!!RESET!
         ) else (
             echo   !GREEN![OK] Engine is up to date!!RESET!
@@ -655,11 +726,9 @@ echo.
 set "PROVIDER_ARGS="
 if defined AI_PROVIDER set "PROVIDER_ARGS=--provider !AI_PROVIDER!"
 
-set "OC_BIN=%ENGINE_DIR%\node_modules\@gitlawb\openclaude\bin\openclaude"
-
 pushd "%ENGINE_DIR%"
 if exist "%OC_BIN%" goto use_oc_bin
-call npx.cmd openclaude !PROVIDER_ARGS! !CMD_ARGS!
+echo   !RED![ERROR] OpenClaude Engine is missing. Restart START.bat to repair the install.!RESET!
 goto engine_done
 :use_oc_bin
 call "%NODE_DIR%\node.exe" "%OC_BIN%" !PROVIDER_ARGS! !CMD_ARGS!

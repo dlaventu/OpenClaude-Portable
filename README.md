@@ -168,6 +168,9 @@ Proxy activity is logged silently to `data/proxy.log` — it never writes to the
 |---|---|
 | `Node.js not found` | Run `START.bat` first — it downloads Node automatically |
 | `EADDRINUSE: port 11435` | The speed proxy from a previous session is still running. Restart `START.bat` — it kills it automatically |
+| `openclaude: dist/cli.mjs not found` | The engine install was interrupted. Pull the latest launcher and run `START.bat` again; it will repair incomplete installs automatically |
+| `npm error could not determine executable to run` | Pull the latest launcher. The app now runs the verified bundled OpenClaude binary instead of falling back to `npx` |
+| `Claude Code on Windows requires git-bash` | Pull the latest launcher and run `START.bat` again; it installs/repairs bundled GitPortable and adds Git Bash to the launch environment |
 | `'D_ARGS' is not recognized` | Old version of START.bat with nested if-blocks. Pull the latest version |
 | Ollama response is very slow | Use a smaller model (`gemma3:1b`), or copy models to a local SSD |
 | API key rejected | Verify your key at the provider's website; re-run option 4 to update it |
